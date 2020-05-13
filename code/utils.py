@@ -1,3 +1,6 @@
+import pandas as pd
+import numpy as np
+
 def HPDI(samples, prob):
     """Calculates the Highest Posterior Density Interval (HPDI)
     
@@ -23,3 +26,26 @@ def HPDI(samples, prob):
             min_interval = interval
             bounds = [i, i+W]
     return samples[bounds[0]], samples[bounds[1]]
+
+
+def precis(samples: dict, prob=0.89):
+    """Computes some summary statistics of the given samples.
+    
+    Arguments:
+        samples (Dict[str, np.array]): dictionary of samples, where the key
+            is the name of the sample site, and the value is the collection
+            of sample values
+        prob (float): the probability mass of the symmetric credible interval
+    Returns:
+        pd.DataFrame: summary dataframe
+    """
+    p1, p2 = (1-prob)/2, 1-(1-prob)/2
+    cols = ["mean","stddev",f"{100*p1:.1f}%",f"{100*p2:.1f}%"]
+    df = pd.DataFrame(columns=cols, index=samples.keys())
+    for k, v in samples.items():
+        df.loc[k]["mean"] = v.mean()
+        df.loc[k]["stddev"] = v.std()
+        q1, q2 = np.quantile(v, [p1, p2])
+        df.loc[k][f"{100*p1:.1f}%"] = q1
+        df.loc[k][f"{100*p2:.1f}%"] = q2
+    return df
