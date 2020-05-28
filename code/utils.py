@@ -1,5 +1,10 @@
 import pandas as pd
 import numpy as np
+from networkx.algorithms.moral import moral_graph
+from networkx.algorithms.dag import ancestors
+from networkx.algorithms.shortest_paths import has_path
+
+### Sample summarization and interval calculation
 
 def HPDI(samples, prob):
     """Calculates the Highest Posterior Density Interval (HPDI)
@@ -49,3 +54,59 @@ def precis(samples: dict, prob=0.89):
         df.loc[k][f"{100*p1:.1f}%"] = q1
         df.loc[k][f"{100*p2:.1f}%"] = q2
     return df
+
+### Causal inference tools
+
+def independent(G, n1, n2, n3=None):
+    """Computes whether n1 and n2 are independent given n3 on the DAG G
+    
+    Can find a decent exposition of the algorithm at http://web.mit.edu/jmn/www/6.034/d-separation.pdf
+    """
+    if n3 is None:
+        n3 = set()
+    elif isinstance(n3, (int, str)):
+        n3 = set([n3])
+    elif not isinstance(n3, set):
+        n3 = set(n3)
+    # Construct the ancestral graph of n1, n2, and n3
+    a = ancestors(G, n1) | ancestors(G, n2) | {n1, n2} | n3
+    G = G.subgraph(a)
+    # Moralize the graph
+    M = moral_graph(G)
+    # Remove n3 (if applicable)
+    M.remove_nodes_from(n3)
+    # Check that path exists between n1 and n2
+    return not has_path(M, n1, n2)
+
+def conditional_independencies(G):
+    """Finds all conditional independencies in the DAG G
+    
+    Only works when conditioning on a single node at a time
+    """
+    tuples = []
+    for i1, n1 in enumerate(G.nodes):
+        for i2, n2 in enumerate(G.nodes):
+            if i1 >= i2:
+                continue
+            for n3 in G.nodes:
+                try:
+                    if independent(G, n1, n2, n3):
+                        tuples.append((n1, n2, n3))
+                except:
+                    pass
+    return tuples
+
+def marginal_independencies(G):
+    """Finds all marginal independencies in the DAG G
+    """
+    tuples = []
+    for i1, n1 in enumerate(G.nodes):
+        for i2, n2 in enumerate(G.nodes):
+            if i1 >= i2:
+                continue
+            try:
+                if independent(G, n1, n2, {}):
+                    tuples.append((n1, n2, {}))
+            except:
+                pass
+    return tuples
