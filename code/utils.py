@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from networkx.algorithms.moral import moral_graph
 from networkx.algorithms.dag import ancestors
 from networkx.algorithms.shortest_paths import has_path
@@ -47,6 +48,10 @@ def precis(samples: dict, prob=0.89):
     p1, p2 = (1-prob)/2, 1-(1-prob)/2
     cols = ["mean","stddev",f"{100*p1:.1f}%",f"{100*p2:.1f}%"]
     df = pd.DataFrame(columns=cols, index=samples.keys())
+    if isinstance(samples, pd.DataFrame):
+        samples = {k: np.array(samples[k]) for k in samples.columns}
+    elif not isinstance(samples, dict):
+        raise TypeError("<samples> must be either dict or DataFrame")
     for k, v in samples.items():
         df.loc[k]["mean"] = v.mean()
         df.loc[k]["stddev"] = v.std()
@@ -110,3 +115,35 @@ def marginal_independencies(G):
             except:
                 pass
     return tuples
+
+def sample_posterior(model, num_samples, sites=None):
+    return {
+        k: v.detach().numpy()
+        for k, v in Predictive(
+            model,
+            guide=model.guide,
+            num_samples=num_samples,
+            return_sites=sites,
+        )().items()
+    }
+
+def sample_prior(model, num_samples, sites=None):
+    return {
+        k: v.detach().numpy()
+        for k, v in Predictive(
+            model,
+            {},
+            return_sites=sites,
+            num_samples=num_samples
+        )().items()
+    }
+
+def plot_intervals(samples, p):
+    for i, (k, s) in enumerate(samples.items()):
+        mean = s.mean()
+        hpdi = HPDI(s, p)
+        plt.scatter([mean], [i], facecolor="none", edgecolor="black")
+        plt.plot(hpdi, [i, i], color="C0")
+        plt.axhline(i, color="grey", alpha=0.5, linestyle="--")
+    plt.yticks(range(len(samples)), samples.keys(), fontsize=15)
+plt.axvline(0, color="black", alpha=0.5, linestyle="--")
