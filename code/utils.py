@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from networkx.algorithms.moral import moral_graph
 from networkx.algorithms.dag import ancestors
 from networkx.algorithms.shortest_paths import has_path
+from pyro.infer import Predictive
 
 ### Sample summarization and interval calculation
 
@@ -116,16 +117,18 @@ def marginal_independencies(G):
                 pass
     return tuples
 
-def sample_posterior(model, num_samples, sites=None):
-    return {
-        k: v.detach().numpy()
-        for k, v in Predictive(
-            model,
-            guide=model.guide,
-            num_samples=num_samples,
-            return_sites=sites,
-        )().items()
-    }
+def sample_posterior(model, num_samples, sites=None, data=None):
+    p = Predictive(
+        model,
+        guide=model.guide,
+        num_samples=num_samples,
+        return_sites=sites,
+    )
+    if data is None:
+        p = p()
+    else:
+        p = p(data)
+    return {k: v.detach().numpy() for k, v in p.items()}
 
 def sample_prior(model, num_samples, sites=None):
     return {
@@ -146,4 +149,4 @@ def plot_intervals(samples, p):
         plt.plot(hpdi, [i, i], color="C0")
         plt.axhline(i, color="grey", alpha=0.5, linestyle="--")
     plt.yticks(range(len(samples)), samples.keys(), fontsize=15)
-plt.axvline(0, color="black", alpha=0.5, linestyle="--")
+    plt.axvline(0, color="black", alpha=0.5, linestyle="--")
