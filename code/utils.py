@@ -5,6 +5,8 @@ from networkx.algorithms.moral import moral_graph
 from networkx.algorithms.dag import ancestors
 from networkx.algorithms.shortest_paths import has_path
 from pyro.infer import Predictive
+from pyro import poutine
+import torch
 
 ### Sample summarization and interval calculation
 
@@ -150,3 +152,16 @@ def plot_intervals(samples, p):
         plt.axhline(i, color="grey", alpha=0.5, linestyle="--")
     plt.yticks(range(len(samples)), samples.keys(), fontsize=15)
     plt.axvline(0, color="black", alpha=0.5, linestyle="--")
+    
+    
+def WAIC(model, x, y, out_var_nm, num_samples=100):
+    p = torch.zeros((num_samples, len(y)))
+    # Get log probability samples
+    for i in range(num_samples):
+        tr = poutine.trace(poutine.condition(model, data=model.guide())).get_trace(x)
+        dist = tr.nodes[out_var_nm]["fn"]
+        p[i] = dist.log_prob(y).detach()
+    pmax = p.max(axis=0).values
+    lppd = pmax + (p - pmax).exp().mean(axis=0).log() # numerically stable version
+    penalty = p.var(axis=0)
+    return -2*(lppd - penalty)
