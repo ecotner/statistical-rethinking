@@ -5,8 +5,10 @@ from networkx.algorithms.moral import moral_graph
 from networkx.algorithms.dag import ancestors
 from networkx.algorithms.shortest_paths import has_path
 from pyro.infer import Predictive
+from pyro.infer.mcmc import NUTS, MCMC
 from pyro import poutine
 import torch
+import torch.tensor as tt
 
 ### Sample summarization and interval calculation
 
@@ -165,3 +167,68 @@ def WAIC(model, x, y, out_var_nm, num_samples=100):
     lppd = pmax + (p - pmax).exp().mean(axis=0).log() # numerically stable version
     penalty = p.var(axis=0)
     return -2*(lppd - penalty)
+
+
+def format_data(df, categoricals=None):
+    data = dict()
+    if categoricals is None:
+        categoricals = []
+    for col in set(df.columns) - set(categoricals):
+        data[col] = tt(df[col].values).double()
+    for col in categoricals:
+        data[col] = tt(df[col].values).long()
+    return data
+
+
+def train_nuts(model, data, num_warmup, num_samples, num_chains=1):
+    kernel = NUTS(model, adapt_step_size=True, adapt_mass_matrix=True, jit_compile=True)
+    engine = MCMC(kernel, num_samples, num_warmup, num_chains=num_chains)
+    engine.run(data, training=True)
+    return engine
+
+
+def traceplot(s, num_chains):
+    fig, axes = plt.subplots(nrows=len(s), figsize=(12, len(s)*num_chains))
+    for (k, v), ax in zip(s.items(), axes):
+        plt.sca(ax)
+        for c in range(num_chains):
+            plt.plot(v[c], linewidth=0.5)
+        plt.ylabel(k)
+    plt.xlabel("Sample index")
+    return fig
+
+def trankplot(s, num_chains):
+    fig, axes = plt.subplots(nrows=len(s), figsize=(12, len(s)*num_chains))
+    ranks = {k: np.argsort(v, axis=None).reshape(v.shape) for k, v in s.items()}
+    num_samples = 1
+    for p in list(s.values())[0].shape:
+        num_samples *= p
+    bins = np.linspace(0, num_samples, 30)
+    for i, (ax, (k, v)) in enumerate(zip(axes, ranks.items())):
+        for c in range(num_chains):
+            ax.hist(v[c], bins=bins, histtype="step", linewidth=2, alpha=0.5)
+        ax.set_xlim(left=0, right=num_samples)
+        ax.set_yticks([])
+        ax.set_ylabel(k)
+    plt.xlabel("sample rank")
+    return fig
+
+
+def unnest_samples(samples: dict, group_by_chain=False, depth=1):
+    """Unnests samples from multivariate distributions
+    
+    The general index structure of a sample tensor is
+    [[chains,] samples [,idx1, idx2, ...]]. Sometimes the distribution is univariate
+    and there are no additional indices. So we will always unnest from the right, but
+    only if the tensor has rank of 3 or more (2 in the case of no grouping by chains).
+    """
+    _samples = samples.copy()
+    for k, s in samples.items():
+        n_idx = len(s.shape) - (group_by_chain + 1)
+        if n_idx > 0:
+            for i in range(s.shape[-n_idx]):
+                _samples[f"{k}[{i}]"] = s[...,i]
+            del _samples[k]
+    if depth >= 2:
+        _samples = unnest_samples(_samples, group_by_chain, depth-1)
+    return _samples

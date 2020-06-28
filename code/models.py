@@ -35,3 +35,5 @@ class RegressionBase:
         for _ in iterator:
             loss.append(svi.step())
         return loss
+
+    
