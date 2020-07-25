@@ -187,12 +187,15 @@ def train_nuts(model, data, num_warmup, num_samples, num_chains=1):
     return engine
 
 
-def traceplot(s, num_chains):
-    fig, axes = plt.subplots(nrows=len(s), figsize=(12, len(s)*num_chains))
+def traceplot(s, num_chains=1):
+    fig, axes = plt.subplots(nrows=len(s), figsize=(12, len(s)*5))
     for (k, v), ax in zip(s.items(), axes):
         plt.sca(ax)
-        for c in range(num_chains):
-            plt.plot(v[c], linewidth=0.5)
+        if num_chains > 1:
+            for c in range(num_chains):
+                plt.plot(v[c], linewidth=0.5)
+        else:
+            plt.plot(v, linewidth=0.5)
         plt.ylabel(k)
     plt.xlabel("Sample index")
     return fig
