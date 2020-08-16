@@ -180,8 +180,11 @@ def format_data(df, categoricals=None):
     return data
 
 
-def train_nuts(model, data, num_warmup, num_samples, num_chains=1):
-    kernel = NUTS(model, adapt_step_size=True, adapt_mass_matrix=True, jit_compile=True)
+def train_nuts(model, data, num_warmup, num_samples, num_chains=1, **kwargs):
+    _kwargs = dict(adapt_step_size=True, adapt_mass_matrix=True, jit_compile=True)
+    _kwargs.update(kwargs)
+    print(_kwargs)
+    kernel = NUTS(model, **_kwargs)
     engine = MCMC(kernel, num_samples, num_warmup, num_chains=num_chains)
     engine.run(data, training=True)
     return engine
@@ -217,7 +220,7 @@ def trankplot(s, num_chains):
     return fig
 
 
-def unnest_samples(samples: dict, group_by_chain=False, depth=1):
+def unnest_samples(s, max_depth=1):
     """Unnests samples from multivariate distributions
     
     The general index structure of a sample tensor is
@@ -225,13 +228,55 @@ def unnest_samples(samples: dict, group_by_chain=False, depth=1):
     and there are no additional indices. So we will always unnest from the right, but
     only if the tensor has rank of 3 or more (2 in the case of no grouping by chains).
     """
-    _samples = samples.copy()
-    for k, s in samples.items():
-        n_idx = len(s.shape) - (group_by_chain + 1)
-        if n_idx > 0:
-            for i in range(s.shape[-n_idx]):
-                _samples[f"{k}[{i}]"] = s[...,i]
-            del _samples[k]
-    if depth >= 2:
-        _samples = unnest_samples(_samples, group_by_chain, depth-1)
-    return _samples
+    def _unnest_samples(s):
+        _s = dict()
+        for k in s:
+            assert s[k].dim() > 0
+            if s[k].dim() == 1:
+                _s[k] = s[k]
+            elif s[k].dim() == 2:
+                for i in range(s[k].shape[1]):
+                    _s[f"{k}[{i}]"] = s[k][:,i]
+            else:
+                for i in range(s[k].shape[1]):
+                    _s[f"{k}[{i}]"] = s[k][:,i,...]
+        return _s
+    
+    for _ in range(max_depth):
+        s = _unnest_samples(s)
+        if all([v.dim() == 1 for v in s.values()]):
+            break
+    return s
+
+
+def get_log_prob(mcmc, data, site_names):
+    """Gets the pointwise log probability of the posterior density conditioned on the data
+    
+    Arguments:
+        mcmc (pyro.infer.mcmc.MCMC): the fitted MC model
+        data (dict): dictionary containing all the input data (including return sites)
+        site_names (str or List[str]): names of return sites to measure log likelihood at
+    Returns:
+        Tensor: pointwise log-likelihood of shape (num posterior samples, num data points)
+    """
+    samples = mcmc.get_samples()
+    model = mcmc.kernel.model
+    # get number of samples
+    N = [v.shape[0] for v in samples.values()]
+    assert [n == N[0] for n in N]
+    N = N[0]
+    if isinstance(site_names, str):
+        site_names = [site_names]
+    # iterate over samples
+    log_prob = torch.zeros(N, len(data[site_names[0]]))
+    for i in range(N):
+        # condition on samples and get trace
+        s = {k: v[i] for k, v in samples.items()}
+        for nm in site_names:
+            s[nm] = data[nm]
+        tr = poutine.trace(poutine.condition(model, data=s)).get_trace(data)
+        # get pointwise log probability
+        for nm in site_names:
+            node = tr.nodes[nm]
+            log_prob[i] += node["fn"].log_prob(node["value"])
+    return log_prob
