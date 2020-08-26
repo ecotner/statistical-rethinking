@@ -40,4 +40,4 @@ Hierarchical/multilevel models are introduced. Advantages/disadvantages of pooli
 Takes multilevel models further by introducing adaptive priors that can take covariance between groups of data into account (multidimensional Gaussians). Introduces Gaussian processes for groups linked by continuous values, which is illustrated in the context of geospatial and phylogenetic similarities.
 
 ## Chapter 15: Missing Data and Other Opportunities
-Teaches how to deal with a variety of problems by modeling the data itself as distributions to be learned. It is shown how to treat measurement error and missing data as generative processes that allow the recovery of the "true" data. Lots of pitfalls related to the causal implications of using such techniques are discussed.
+Teaches how to deal with a variety of problems by modeling the data itself as distributions to be learned. It is shown how to treat measurement error and missing data as generative processes that allow the recovery of the "true" data. Lots of pitfalls related to the causal implications of using such techniques are discussed. Latent discrete variables and their treatment in HMC is also shown.
