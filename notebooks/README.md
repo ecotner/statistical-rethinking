@@ -41,3 +41,6 @@ Takes multilevel models further by introducing adaptive priors that can take cov
 
 ## Chapter 15: Missing Data and Other Opportunities
 Teaches how to deal with a variety of problems by modeling the data itself as distributions to be learned. It is shown how to treat measurement error and missing data as generative processes that allow the recovery of the "true" data. Lots of pitfalls related to the causal implications of using such techniques are discussed. Latent discrete variables and their treatment in HMC is also shown.
+
+## Chapter 16: Generalized Linear Madness
+Explains that while GLM's are a powerful tool, they are sometimes so general as to be uninterpretable. Often times, it is better to formulate a model using scientific theory inspired by the domain, trying to keep the model as close as possible to a plausible generative story. We go through several examples, including biological growth inspired by basic geometric principles, state space models for inferring strategies in children and forecasting population dynamics, highly nonlinear situations where we infer the parameters of a differential equations.
